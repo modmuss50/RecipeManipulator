@@ -51,11 +51,11 @@ public class RecipeManipulator {
 
 	@Mod.EventHandler
 	public void postInit(FMLPostInitializationEvent event) {
-//		try {
-//			removeRecipes();
-//		} catch (IOException e) {
-//			e.printStackTrace();
-//		}
+		//		try {
+		//			removeRecipes();
+		//		} catch (IOException e) {
+		//			e.printStackTrace();
+		//		}
 		readDirectory(recipeDir);
 	}
 
@@ -65,7 +65,7 @@ public class RecipeManipulator {
 				readDirectory(file);
 				continue;
 			}
-			if(file.getName().equals(removalFile.getName()) || file.getName().startsWith("_")){
+			if (file.getName().equals(removalFile.getName()) || file.getName().startsWith("_")) {
 				continue;
 			}
 			if (file.getName().endsWith(".json")) {
@@ -99,41 +99,41 @@ public class RecipeManipulator {
 		}
 	}
 
-	private static void loadConstants(JsonContext context, JsonObject[] json){
+	private static void loadConstants(JsonContext context, JsonObject[] json) {
 		try {
-			if(loadConstantsMethod == null){
-				for(Method method : context.getClass().getDeclaredMethods()){
-					if(method.getName().equals("loadConstants")){
+			if (loadConstantsMethod == null) {
+				for (Method method : context.getClass().getDeclaredMethods()) {
+					if (method.getName().equals("loadConstants")) {
 						loadConstantsMethod = method;
 						loadConstantsMethod.setAccessible(true);
 					}
 				}
 			}
-			loadConstantsMethod.invoke(context, new Object[]{json});
+			loadConstantsMethod.invoke(context, new Object[] { json });
 		} catch (IllegalAccessException | InvocationTargetException e) {
 			throw new Error("Failed to read constants", e);
 		}
 	}
 
 	private static void removeRecipes() throws IOException {
-		if(!removalFile.exists()){
+		if (!removalFile.exists()) {
 			RemovalFormat format = new RemovalFormat();
 			format.recipesToRemove = new ArrayList<>();
 			FileUtils.writeStringToFile(removalFile, GSON.toJson(format), Charset.forName("UTF-8"));
 		}
 		String json = FileUtils.readFileToString(removalFile, Charset.forName("UTF-8"));
 		RemovalFormat format = GSON.fromJson(json, RemovalFormat.class);
-		for(String string : format.recipesToRemove){
-			if(string.contains(":")){
+		for (String string : format.recipesToRemove) {
+			if (string.contains(":")) {
 				ResourceLocation resourceLocation = new ResourceLocation(string);
 				removeRecipe(recipe -> {
-					if(recipe.getRecipeOutput().isEmpty()){
+					if (recipe.getRecipeOutput().isEmpty()) {
 						return false;
 					}
-					if(recipe.getRecipeOutput().getItem().getRegistryName() == null){
+					if (recipe.getRecipeOutput().getItem().getRegistryName() == null) {
 						return false;
 					}
-					if(recipe.getRecipeOutput().getItem().getRegistryName().equals(resourceLocation)){
+					if (recipe.getRecipeOutput().getItem().getRegistryName().equals(resourceLocation)) {
 						return true;
 					}
 					return false;
@@ -142,9 +142,9 @@ public class RecipeManipulator {
 		}
 	}
 
-	public static void removeRecipe(Predicate<IRecipe> recipePredicate){
-		for(IRecipe recipe : CraftingManager.REGISTRY){
-			if(recipePredicate.test(recipe)){
+	public static void removeRecipe(Predicate<IRecipe> recipePredicate) {
+		for (IRecipe recipe : CraftingManager.REGISTRY) {
+			if (recipePredicate.test(recipe)) {
 				System.out.println("removing:" + recipe.toString());
 			}
 		}
@@ -167,7 +167,5 @@ public class RecipeManipulator {
 		}
 		return true;
 	}
-
-
 
 }
