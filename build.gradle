@@ -1,0 +1,73 @@
+buildscript {
+	repositories {
+		jcenter()
+		maven {
+			name = "forge"
+			url = "http://files.minecraftforge.net/maven"
+		}
+		maven {
+			name = "Modmuss50"
+			url = "http://maven.modmuss50.me/"
+		}
+		maven {
+			url "https://plugins.gradle.org/m2/"
+		}
+	}
+	dependencies {
+		classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
+	}
+}
+apply plugin: 'net.minecraftforge.gradle.forge'
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+version = "0.1.0"
+
+
+def ENV = System.getenv()
+if (ENV.BUILD_NUMBER) {
+	version = version + "." + "${System.getenv().BUILD_NUMBER}"
+}
+
+minecraft {
+	version = "1.12-14.21.0.2335"
+	mappings = "snapshot_20170615"
+	replace "@MODVERSION@", project.version
+	runDir = "run"
+	makeObfSourceJar = false
+}
+
+group = 'RecipeManipulator'
+
+import groovy.util.XmlSlurper
+import org.apache.commons.io.FileUtils
+
+task curseTools {
+	doLast{
+	def cacheFiles = new File(".gradle/curseTools")
+	if (!cacheFiles.exists()) {
+		cacheFiles.mkdirs()
+	}
+
+	def mavenMetadata = new File(cacheFiles, "maven-metadata.xml")
+
+	logger.lifecycle(":downloading curseTools metadata")
+	FileUtils.copyURLToFile(new URL("http://maven.modmuss50.me/CurseTools/CurseTools/maven-metadata.xml"), mavenMetadata)
+
+	def metadata = new XmlSlurper().parseText(FileUtils.readFileToString(mavenMetadata))
+	def curseToolsVersion = metadata.versioning.release
+
+	def curseTools = new File(cacheFiles, "${curseToolsVersion}.jar")
+
+	logger.lifecycle(":downloading CurseTools")
+	FileUtils.copyURLToFile(new URL("http://maven.modmuss50.me/CurseTools/CurseTools/${curseToolsVersion}/CurseTools-${curseToolsVersion}.jar"), curseTools)
+
+	logger.lifecycle(":launching CurseTools")
+	ant.java(jar: curseTools.getAbsolutePath(), fork: true, spawn: false) {
+		arg(value: jar.archivePath.getAbsolutePath())
+		arg(value: deobfJar.archivePath.getAbsolutePath())
+		arg(value: apiJar.archivePath.getAbsolutePath())
+	}
+	}
+}
