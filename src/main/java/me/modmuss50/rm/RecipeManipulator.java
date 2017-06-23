@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import net.minecraft.client.Minecraft;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.item.crafting.IRecipe;
@@ -42,7 +41,7 @@ public class RecipeManipulator {
 
 	@Mod.EventHandler
 	public void preInit(FMLPreInitializationEvent event) {
-		recipeDir = new File(Minecraft.getMinecraft().mcDataDir, "recipes");
+		recipeDir = new File(event.getModConfigurationDirectory().getParent(), "recipes");
 		if (!recipeDir.exists()) {
 			recipeDir.mkdir();
 		}
