@@ -83,11 +83,11 @@ public class RecipeManipulator {
 
 			File constantsFile = new File(recipeFile.getParent(), "_constants.json");
 			reader = Files.newBufferedReader(constantsFile.toPath());
-			JsonObject[] constantsJson = JsonUtils.func_193839_a(GSON, reader, JsonObject[].class);
+			JsonObject[] constantsJson = JsonUtils.fromJson(GSON, reader, JsonObject[].class);
 			loadConstants(ctx, constantsJson);
 
 			reader = Files.newBufferedReader(recipeFile.toPath());
-			JsonObject json = JsonUtils.func_193839_a(GSON, reader, JsonObject.class);
+			JsonObject json = JsonUtils.fromJson(GSON, reader, JsonObject.class);
 			IRecipe recipe = CraftingHelper.getRecipe(json, ctx);
 			ForgeRegistries.RECIPES.register(recipe.setRegistryName(key));
 
