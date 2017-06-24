@@ -4,11 +4,14 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import net.minecraft.inventory.InventoryCrafting;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.util.JsonUtils;
+import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.World;
 import net.minecraftforge.common.crafting.CraftingHelper;
 import net.minecraftforge.common.crafting.JsonContext;
 import net.minecraftforge.fml.common.Mod;
@@ -18,6 +21,7 @@ import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 
+import javax.annotation.Nullable;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -50,11 +54,11 @@ public class RecipeManipulator {
 
 	@Mod.EventHandler
 	public void postInit(FMLPostInitializationEvent event) {
-		//		try {
-		//			removeRecipes();
-		//		} catch (IOException e) {
-		//			e.printStackTrace();
-		//		}
+		try {
+			removeRecipes();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		readDirectory(recipeDir);
 	}
 
@@ -123,7 +127,7 @@ public class RecipeManipulator {
 		String json = FileUtils.readFileToString(removalFile, Charset.forName("UTF-8"));
 		RemovalFormat format = GSON.fromJson(json, RemovalFormat.class);
 		for (String string : format.recipesToRemove) {
-			if (string.contains(":")) {
+			if (string.startsWith("item@") || string.startsWith("block@") && string.contains(":")) {
 				ResourceLocation resourceLocation = new ResourceLocation(string);
 				removeRecipe(recipe -> {
 					if (recipe.getRecipeOutput().isEmpty()) {
@@ -138,14 +142,69 @@ public class RecipeManipulator {
 					return false;
 				});
 			}
+			//TODO improve this
 		}
 	}
 
 	public static void removeRecipe(Predicate<IRecipe> recipePredicate) {
 		for (IRecipe recipe : CraftingManager.REGISTRY) {
 			if (recipePredicate.test(recipe)) {
-				System.out.println("removing:" + recipe.toString());
+				removeRecipe(recipe);
 			}
+		}
+	}
+
+	public static void removeRecipe(IRecipe recipe){
+		ForgeRegistries.RECIPES.register(new BlankRecipe(recipe));
+	}
+
+	private static class BlankRecipe implements IRecipe {
+
+		IRecipe oldRecipe;
+
+		public BlankRecipe(IRecipe oldRecipe) {
+			this.oldRecipe = oldRecipe;
+		}
+
+		@Override
+		public boolean matches(InventoryCrafting inv, World worldIn) {
+			return false;
+		}
+
+		@Override
+		public ItemStack getCraftingResult(InventoryCrafting inv) {
+			return ItemStack.EMPTY;
+		}
+
+		@Override
+		public boolean canFit(int width, int height) {
+			return false;
+		}
+
+		@Override
+		public ItemStack getRecipeOutput() {
+			return ItemStack.EMPTY;
+		}
+
+		@Override
+		public NonNullList<ItemStack> getRemainingItems(InventoryCrafting inv) {
+			return NonNullList.create();
+		}
+
+		@Override
+		public IRecipe setRegistryName(ResourceLocation name) {
+			return oldRecipe.setRegistryName(name);
+		}
+
+		@Nullable
+		@Override
+		public ResourceLocation getRegistryName() {
+			return oldRecipe.getRegistryName();
+		}
+
+		@Override
+		public Class<IRecipe> getRegistryType() {
+			return oldRecipe.getRegistryType();
 		}
 	}
 
