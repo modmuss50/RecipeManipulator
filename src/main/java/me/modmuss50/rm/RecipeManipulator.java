@@ -142,7 +142,6 @@ public class RecipeManipulator {
 					return false;
 				});
 			}
-			//TODO improve this
 		}
 	}
 
