@@ -128,7 +128,7 @@ public class RecipeManipulator {
 		RemovalFormat format = GSON.fromJson(json, RemovalFormat.class);
 		for (String string : format.recipesToRemove) {
 			if (string.startsWith("item@") || string.startsWith("block@") && string.contains(":")) {
-				ResourceLocation resourceLocation = new ResourceLocation(string);
+				ResourceLocation resourceLocation = new ResourceLocation(string.replace("block@","").replace("item@", ""));
 				removeRecipe(recipe -> {
 					if (recipe.getRecipeOutput().isEmpty()) {
 						return false;
