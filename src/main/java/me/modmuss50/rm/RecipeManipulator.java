@@ -18,6 +18,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
+import net.minecraftforge.oredict.OreDictionary;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 
@@ -128,7 +129,12 @@ public class RecipeManipulator {
 		RemovalFormat format = GSON.fromJson(json, RemovalFormat.class);
 		for (String string : format.recipesToRemove) {
 			if (string.startsWith("item@") || string.startsWith("block@") && string.contains(":")) {
-				ResourceLocation resourceLocation = new ResourceLocation(string.replace("block@","").replace("item@", ""));
+				final String[] split = string.replace("block@","").replace("item@", "").split(":");
+				if(split.length < 2){
+					throw new RuntimeException("Recipe removal.json file is invalid, line: " + string);
+				}
+				final boolean metaData = split.length == 3;
+				ResourceLocation resourceLocation = new ResourceLocation(split[0], split[1]);
 				removeRecipe(recipe -> {
 					if (recipe.getRecipeOutput().isEmpty()) {
 						return false;
@@ -136,8 +142,40 @@ public class RecipeManipulator {
 					if (recipe.getRecipeOutput().getItem().getRegistryName() == null) {
 						return false;
 					}
-					if (recipe.getRecipeOutput().getItem().getRegistryName().equals(resourceLocation)) {
-						return true;
+					if(!metaData){
+						if (recipe.getRecipeOutput().getItem().getRegistryName().equals(resourceLocation)) {
+							return true;
+						}
+					} else {
+						int meta = Integer.parseInt(split[2]);
+						ItemStack output = recipe.getRecipeOutput();
+						if (output.getItem().getRegistryName().equals(resourceLocation)) {
+							if(output.getMetadata() == meta){
+								return true;
+							}
+						}
+					}
+
+					return false;
+				});
+			} else if (string.startsWith("ore@")){
+				String oreName = string.replace("ore@", "");
+				removeRecipe(recipe -> {
+					if(!OreDictionary.doesOreNameExist(oreName)){
+						return false;
+					}
+					if (recipe.getRecipeOutput().isEmpty()) {
+						return false;
+					}
+					if (recipe.getRecipeOutput().getItem().getRegistryName() == null) {
+						return false;
+					}
+					ItemStack output = recipe.getRecipeOutput();
+					NonNullList<ItemStack> ores = OreDictionary.getOres((oreName));
+					for (ItemStack stack : ores) {
+						if (isItemEqual(stack, output)) {
+							return true;
+						}
 					}
 					return false;
 				});
