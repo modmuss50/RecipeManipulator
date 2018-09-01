@@ -4,25 +4,32 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import net.minecraft.inventory.InventoryCrafting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.command.CommandBase;
+import net.minecraft.command.CommandException;
+import net.minecraft.command.ICommandSender;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.CraftingManager;
 import net.minecraft.item.crafting.IRecipe;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.integrated.IntegratedServer;
 import net.minecraft.util.JsonUtils;
 import net.minecraft.util.NonNullList;
 import net.minecraft.util.ResourceLocation;
-import net.minecraft.world.World;
+import net.minecraft.util.text.TextComponentString;
 import net.minecraftforge.common.crafting.CraftingHelper;
 import net.minecraftforge.common.crafting.JsonContext;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import net.minecraftforge.oredict.OreDictionary;
+import net.minecraftforge.registries.GameData;
+import net.minecraftforge.registries.RegistryManager;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 
-import javax.annotation.Nullable;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -63,6 +70,28 @@ public class RecipeManipulator {
 		readDirectory(recipeDir);
 	}
 
+	@Mod.EventHandler
+	public void serverStart(FMLServerStartingEvent event){
+		event.registerServerCommand(new CommandBase() {
+			@Override
+			public String getName() {
+				return "recipe_reload";
+			}
+
+			@Override
+			public String getUsage(ICommandSender sender) {
+				return getName();
+			}
+
+			@Override
+			public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
+				long start = System.currentTimeMillis();
+				Minecraft.getMinecraft().addScheduledTask(RecipeManipulator::reload);
+				sender.sendMessage(new TextComponentString("Recipes reloaded in " + (System.currentTimeMillis() - start) + "ms"));
+			}
+		});
+	}
+
 	private static void readDirectory(File recipeDir) {
 		for (File file : recipeDir.listFiles()) {
 			if (file.isDirectory()) {
@@ -87,14 +116,17 @@ public class RecipeManipulator {
 			BufferedReader reader;
 
 			File constantsFile = new File(recipeFile.getParent(), "_constants.json");
-			reader = Files.newBufferedReader(constantsFile.toPath());
-			JsonObject[] constantsJson = JsonUtils.fromJson(GSON, reader, JsonObject[].class);
-			loadConstants(ctx, constantsJson);
+			if(constantsFile.exists()){
+				reader = Files.newBufferedReader(constantsFile.toPath());
+				JsonObject[] constantsJson = JsonUtils.fromJson(GSON, reader, JsonObject[].class);
+				loadConstants(ctx, constantsJson);
+			}
 
 			reader = Files.newBufferedReader(recipeFile.toPath());
 			JsonObject json = JsonUtils.fromJson(GSON, reader, JsonObject.class);
 			IRecipe recipe = CraftingHelper.getRecipe(json, ctx);
-			ForgeRegistries.RECIPES.register(recipe.setRegistryName(key));
+			addRecipe(recipe.setRegistryName(key));
+			reader.close();
 
 		} catch (JsonParseException e) {
 			throw new Error("Parsing error loading recipe " + key, e);
@@ -191,58 +223,44 @@ public class RecipeManipulator {
 		}
 	}
 
-	public static void removeRecipe(IRecipe recipe){
-		ForgeRegistries.RECIPES.register(new BlankRecipe(recipe));
+	public static List<IRecipe> removedRecipes = new ArrayList<>();
+	public static List<IRecipe> addedRecipes = new ArrayList<>();
+
+	public static void removeRecipe(IRecipe recipe) {
+		removedRecipes.add(recipe);
+		RegistryManager.ACTIVE.getRegistry(GameData.RECIPES).remove(recipe.getRegistryName());
+		RecipeManipulatorJEI.removeRecipe(recipe);
 	}
 
-	private static class BlankRecipe implements IRecipe {
+	public static void addRecipe(IRecipe recipe){
+		addedRecipes.add(recipe);
+		ForgeRegistries.RECIPES.register(recipe);
+		RecipeManipulatorJEI.addRecipe(recipe);
+	}
 
-		IRecipe oldRecipe;
+	public static void reload(){
+		RegistryManager.ACTIVE.getRegistry(GameData.RECIPES).unfreeze();
+		undoRecipeRemoval();
+		undoRecipeAddition();
+		readDirectory(recipeDir);
+		RegistryManager.ACTIVE.getRegistry(GameData.RECIPES).freeze();
+	}
 
-		public BlankRecipe(IRecipe oldRecipe) {
-			this.oldRecipe = oldRecipe;
-		}
+	public static void undoRecipeRemoval(){
+		removedRecipes.forEach(ForgeRegistries.RECIPES::register);
+		removedRecipes.forEach(RecipeManipulatorJEI::addRecipe);
+		removedRecipes.clear();
+	}
 
-		@Override
-		public boolean matches(InventoryCrafting inv, World worldIn) {
-			return false;
-		}
-
-		@Override
-		public ItemStack getCraftingResult(InventoryCrafting inv) {
-			return ItemStack.EMPTY;
-		}
-
-		@Override
-		public boolean canFit(int width, int height) {
-			return false;
-		}
-
-		@Override
-		public ItemStack getRecipeOutput() {
-			return ItemStack.EMPTY;
-		}
-
-		@Override
-		public NonNullList<ItemStack> getRemainingItems(InventoryCrafting inv) {
-			return NonNullList.create();
-		}
-
-		@Override
-		public IRecipe setRegistryName(ResourceLocation name) {
-			return oldRecipe.setRegistryName(name);
-		}
-
-		@Nullable
-		@Override
-		public ResourceLocation getRegistryName() {
-			return oldRecipe.getRegistryName();
-		}
-
-		@Override
-		public Class<IRecipe> getRegistryType() {
-			return oldRecipe.getRegistryType();
-		}
+	public static void undoRecipeAddition(){
+		addedRecipes.forEach(recipe -> Minecraft.getMinecraft().player.recipeBook.lock(recipe)); //Client
+		addedRecipes.forEach(recipe -> {
+			IntegratedServer server = Minecraft.getMinecraft().getIntegratedServer();
+			server.getPlayerList().getPlayers().forEach(entityPlayerMP -> entityPlayerMP.getRecipeBook().lock(recipe));
+		}); //Server
+		addedRecipes.forEach(RecipeManipulatorJEI::removeRecipe);
+		addedRecipes.forEach(recipe -> RegistryManager.ACTIVE.getRegistry(GameData.RECIPES).remove(recipe.getRegistryName()));
+		addedRecipes.clear();
 	}
 
 	private static class RemovalFormat {
